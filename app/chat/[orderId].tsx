@@ -1,9 +1,11 @@
+// PERBAIKAN 1: Gunakan relative path agar konsisten
 import { Button, Icon, Text } from '@rneui/themed';
 import { Session } from '@supabase/supabase-js';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import OrderTimeline from '../../components/OrderTimeline';
 import { supabase } from '../../lib/supabase';
 
 interface Message {
@@ -20,6 +22,7 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
+  const [orderStatus, setOrderStatus] = useState('');
   
   const flatListRef = useRef<FlatList>(null);
 
@@ -30,12 +33,11 @@ export default function ChatScreen() {
       if (session) fetchMessages();
     });
 
-    // 2. Setup Realtime Channel (Dengan nama channel unik per order)
-    // Tips: Gunakan ID order sebagai nama channel biar spesifik
-    const channelName = `chat_room:${orderId}`; 
+    // 2. Setup Realtime Channel
     
-    const channel = supabase
-      .channel(channelName)
+    // Channel A: Chat Messages
+    const messageChannel = supabase
+      .channel(`chat_room:${orderId}`)
       .on(
         'postgres_changes',
         {
@@ -45,12 +47,10 @@ export default function ChatScreen() {
           filter: `order_id=eq.${orderId}`,
         },
         (payload) => {
-          console.log("Pesan baru diterima Realtime!", payload); // Cek Terminal
+          // console.log("Pesan baru diterima Realtime!", payload); 
           const newMessage = payload.new as Message;
           
-          // Trik update state yang aman:
           setMessages((currentMessages) => {
-            // Cek dulu, jangan sampai duplikat (kadang realtime kirim 2x)
             if (currentMessages.find(m => m.id === newMessage.id)) {
               return currentMessages;
             }
@@ -60,9 +60,22 @@ export default function ChatScreen() {
       )
       .subscribe();
 
-    // 3. Bersihkan saat keluar
+    // Channel B: Order Status Update
+    const orderChannel = supabase.channel(`order_status:${orderId}`)
+      .on('postgres_changes', { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'orders', 
+          filter: `id=eq.${orderId}` 
+      }, (payload) => {
+          setOrderStatus(payload.new.status); 
+      })
+      .subscribe();
+
+    // PERBAIKAN 2: Cleanup (Bersihkan KEDUA channel saat keluar halaman)
     return () => {
-      supabase.removeChannel(channel);
+        supabase.removeChannel(messageChannel);
+        supabase.removeChannel(orderChannel);
     };
   }, [orderId]);
 
@@ -74,6 +87,15 @@ export default function ChatScreen() {
       .order('created_at', { ascending: true });
     if (data) setMessages(data);
     setLoading(false);
+
+    // Ambil info status order awal
+    const { data: orderData } = await supabase
+      .from('orders')
+      .select('status')
+      .eq('id', orderId)
+      .single();
+
+    if(orderData) setOrderStatus(orderData.status);
   }
 
   async function sendMessage() {
@@ -105,7 +127,6 @@ export default function ChatScreen() {
     );
   };
 
-  // Scroll ke bawah saat keyboard muncul
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
         flatListRef.current?.scrollToEnd({ animated: true });
@@ -116,7 +137,7 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
       
-      {/* 1. HEADER (DI LUAR KeyboardAvoidingView) - Supaya diam di tempat */}
+      {/* 1. HEADER */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Icon name="arrow-left" type="font-awesome" size={20} color="#333" />
@@ -127,13 +148,14 @@ export default function ChatScreen() {
         </View>
       </View>
 
-      {/* 2. AREA KONTEN (YANG BISA NAIK TURUN) */}
+      {/* 2. TIMELINE REALTIME */}
+      {/* Kita taruh di sini agar tetap diam di atas saat chat di-scroll */}
+      {orderStatus !== '' && <OrderTimeline currentStatus={orderStatus} />}
+
+      {/* 3. AREA CHAT */}
       <KeyboardAvoidingView 
           style={{ flex: 1 }} 
-          // iOS butuh 'padding', Android biasanya butuh 'height' atau 'padding' tergantung versi OS
-          // Kita pakai ternary operator
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-          // Offset untuk mengkompensasi tinggi Header agar tidak ketabrak
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.container}>
@@ -146,9 +168,7 @@ export default function ChatScreen() {
                 keyExtractor={(item) => item.id}
                 renderItem={renderItem}
                 contentContainerStyle={{ padding: 15, paddingBottom: 20 }}
-                // Saat ukuran konten berubah (ada pesan baru), scroll ke bawah
                 onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                // Saat layout berubah (keyboard muncul), scroll ke bawah
                 onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
                 />
             )}
@@ -186,7 +206,7 @@ const styles = StyleSheet.create({
       borderBottomWidth: 1,
       borderBottomColor: '#eee',
       backgroundColor: 'white',
-      height: 60, // Kita set tinggi pasti
+      height: 60,
   },
   backButton: { padding: 10, marginRight: 10 },
   headerTitle: { fontWeight: 'bold', fontSize: 16 },

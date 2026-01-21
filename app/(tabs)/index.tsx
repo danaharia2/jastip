@@ -7,8 +7,9 @@ import { supabase } from '../../lib/supabase';
 // Tipe data (Tetap sama)
 interface TripWithProfile {
   id: string;
-  destination_country: string;
+  destination_province: string;
   destination_city: string | null;
+  vehicle_type: string;
   departure_date: string;
   description: string | null;
   traveler_id: string;
@@ -58,7 +59,7 @@ export default function HomeScreen() {
         .range(from, to); // <--- INI KUNCI PAGINATION
 
       if (keyword && keyword.trim() !== '') {
-        query = query.or(`destination_country.ilike.%${keyword}%,destination_city.ilike.%${keyword}%`);
+        query = query.or(`destination_province.ilike.%${keyword}%,destination_city.ilike.%${keyword}%`);
       }
 
       const { data, error } = await query;
@@ -131,8 +132,7 @@ export default function HomeScreen() {
       <View style={styles.cardHeader}>
         <View style={styles.userInfo}>
             <Avatar 
-                size={32} 
-                rounded 
+                size={32} rounded 
                 source={item.profiles?.avatar_url ? { uri: item.profiles.avatar_url } : undefined}
                 icon={!item.profiles?.avatar_url ? { name: 'user', type: 'font-awesome' } : undefined}
                 containerStyle={{ backgroundColor: '#ccc', marginRight: 10 }}
@@ -141,16 +141,23 @@ export default function HomeScreen() {
                 <Text style={styles.userName}>
                     {item.profiles?.full_name || item.profiles?.username || 'Traveler'}
                 </Text>
-                <Text style={styles.tripDate}>Berangkat: {item.departure_date}</Text>
+                <Text style={styles.tripDate}>
+                    {/* Format tanggal Indonesia */}
+                    {new Date(item.departure_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </Text>
             </View>
+        </View>
+        {/* IKON KENDARAAN POJOK KANAN ATAS */}
+        <View style={{ backgroundColor: '#e6f2ff', padding: 5, borderRadius: 5 }}>
+            <Icon name={item.vehicle_type || 'plane'} type="font-awesome" size={16} color="#2089dc" />
         </View>
       </View>
 
       <Card.Divider />
 
       <View style={styles.destinationRow}>
-        <Icon name="plane" type="font-awesome" color="#2089dc" size={24} style={{marginRight: 10}} />
-        <Text h4>{item.destination_country}</Text>
+        {/* Tampilkan PROVINSI */}
+        <Text h4>{item.destination_province}</Text>
       </View>
       
       {item.destination_city && (
@@ -163,10 +170,11 @@ export default function HomeScreen() {
 
       <Button
         icon={<Icon name="shopping-bag" color="#ffffff" type="font-awesome" size={15} style={{ marginRight: 10 }}/>}
-        buttonStyle={{ borderRadius: 0, marginLeft: 0, marginRight: 0, marginBottom: 0, marginTop: 15 }}
+        buttonStyle={{ borderRadius: 0, marginTop: 15 }}
         title="Titip Barang"
         onPress={() => {
-            router.push(`/trip/${item.id}?country=${item.destination_country}&traveler=${item.traveler_id}`);
+            // Update parameter router juga (Ganti country -> province)
+            router.push(`/trip/${item.id}?province=${item.destination_province}&traveler=${item.traveler_id}`);
         }}
       />
     </Card>

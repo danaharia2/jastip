@@ -43,7 +43,7 @@ export default function Auth() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Jastip App ✈️</Text>
+      <Text style={styles.header}>Jastip App</Text>
       <View style={[styles.verticallySpaced, styles.mt20]}>
         <Input
           label="Email"

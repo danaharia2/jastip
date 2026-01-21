@@ -5,7 +5,7 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
 export default function TripDetail() {
-  const { id, country, traveler } = useLocalSearchParams(); // Tangkap data dari halaman Home
+  const { id, province, traveler } = useLocalSearchParams(); // Tangkap data dari halaman Home
   const router = useRouter();
   
   const [itemName, setItemName] = useState('');
@@ -34,10 +34,6 @@ export default function TripDetail() {
         traveler_id: traveler, // ID Traveler kita lempar dari Home tadi
         item_name: itemName,
         item_price: parseInt(price),
-        jastip_fee: 25000, // Sementara kita tembak flat dulu (Rp 25.000)
-        platform_fee: 5000, // Fee aplikasi (Rp 5.000)
-        total_amount: parseInt(price) + 30000, 
-        status: 'pending_payment'
       });
 
       if (error) throw error;
@@ -56,7 +52,7 @@ export default function TripDetail() {
   return (
     <ScrollView style={styles.container}>
       <Card>
-        <Card.Title>TITIP BARANG DARI {typeof country === 'string' ? country.toUpperCase() : ''}</Card.Title>
+        <Card.Title>TITIP BARANG DARI {typeof province === 'string' ? province.toUpperCase() : ''}</Card.Title>
         <Card.Divider />
         <Text style={{marginBottom: 10}}>
             Kamu akan menitip barang kepada Traveler ini. Pastikan detail barang jelas ya!

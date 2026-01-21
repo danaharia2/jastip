@@ -1,64 +1,60 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Button, Input, Text } from '@rneui/themed';
+import { Button, Icon, Input, Text } from '@rneui/themed';
 import { Session } from '@supabase/supabase-js';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 
+// Daftar Kendaraan
+const VEHICLES = [
+  { id: 'plane', name: 'Pesawat', icon: 'plane' },
+  { id: 'train', name: 'Kereta', icon: 'train' },
+  { id: 'bus', name: 'Bus', icon: 'bus' },
+  { id: 'car', name: 'Mobil', icon: 'car' },
+  { id: 'motorcycle', name: 'Motor', icon: 'motorcycle' },
+  { id: 'ship', name: 'Kapal', icon: 'ship' },
+];
+
 export default function CreateTrip({ session }: { session: Session }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   
-  // State untuk form
-  const [country, setCountry] = useState('');
+  // State Form Baru
+  const [province, setProvince] = useState('');
   const [city, setCity] = useState('');
+  const [vehicle, setVehicle] = useState('plane'); // Default Pesawat
   
-  // 2. Ubah State Date: Kita simpan Objek Date asli untuk logika, dan String untuk database
   const [date, setDate] = useState(new Date()); 
-  const [showPicker, setShowPicker] = useState(false); // Untuk kontrol muncul/hilang picker
-  const [dateSelected, setDateSelected] = useState(false); // Penanda apakah user sudah pilih tanggal atau belum
+  const [showPicker, setShowPicker] = useState(false);
+  const [dateSelected, setDateSelected] = useState(false);
 
   const [desc, setDesc] = useState('');
 
-  // 3. Fungsi saat tanggal dipilih
   const onChangeDate = (event: any, selectedDate?: Date) => {
     const currentDate = selectedDate || date;
-    setShowPicker(Platform.OS === 'ios'); // Di iOS biarkan tetap muncul (opsional), di Android harus ditutup manual
+    setShowPicker(Platform.OS === 'ios');
     if (event.type === 'set' || Platform.OS === 'ios') {
-        setShowPicker(false); // Tutup picker
+        setShowPicker(false);
         setDate(currentDate);
         setDateSelected(true);
     } else {
-        setShowPicker(false); // Jika user cancel
+        setShowPicker(false);
     }
   };
 
-  // Helper untuk format tanggal ke YYYY-MM-DD (Supabase format)
-  const formatDateForDB = (rawDate: Date) => {
-    return rawDate.toISOString().split('T')[0];
-  };
-
-  // Helper untuk format tanggal yang enak dibaca user (Indonesia)
   const formatDateDisplay = (rawDate: Date) => {
-    return new Intl.DateTimeFormat('id-ID', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    }).format(rawDate);
+    return new Intl.DateTimeFormat('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(rawDate);
   };
 
   async function handlePostTrip() {
-    // Validasi sederhana
-    if (!country) {
-      Alert.alert('Eits!', 'Negara tujuan wajib diisi ya.');
+    if (!province || !city) {
+      Alert.alert('Data Kurang', 'Provinsi dan Kota wajib diisi ya.');
       return;
     }
     
-    // Validasi Tanggal (harus dipilih)
     if (!dateSelected) {
-        Alert.alert('Lupa Tanggal?', 'Silakan pilih tanggal keberangkatan dulu.');
+        Alert.alert('Lupa Tanggal?', 'Silakan pilih tanggal keberangkatan.');
         return;
     }
 
@@ -67,27 +63,23 @@ export default function CreateTrip({ session }: { session: Session }) {
     try {
       const { error } = await supabase.from('trips').insert({
         traveler_id: session.user.id,
-        destination_country: country,
+        destination_province: province, // Kolom Baru
         destination_city: city,
-        departure_date: formatDateForDB(date), // Gunakan format YYYY-MM-DD
-        return_date: formatDateForDB(date),    // Sementara disamakan
+        vehicle_type: vehicle,          // Kolom Baru
+        departure_date: date.toISOString().split('T')[0],
+        return_date: date.toISOString().split('T')[0],
         description: desc,
         status: 'open',
       });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
-      Alert.alert('Mantap!', 'Jadwal Jastip berhasil diposting!', [
+      Alert.alert('Siap Berangkat!', 'Jadwal Jastip domestik berhasil diposting!', [
         { 
           text: 'OK', 
           onPress: () => {
-            // Reset form
-            setCountry('');
+            setProvince('');
             setCity('');
-            setDate(new Date());
-            setDateSelected(false);
             setDesc('');
             router.push('/(tabs)'); 
           }
@@ -103,64 +95,77 @@ export default function CreateTrip({ session }: { session: Session }) {
 
   return (
     <ScrollView style={styles.container}>
-      <Text h4 style={styles.header}>Mau Pergi ke Mana?</Text>
-      <Text style={styles.subHeader}>Buka jastip biar ongkos jalan-jalan ketutup!</Text>
+      <Text h4 style={styles.header}>Rute Perjalanan</Text>
+      <Text style={styles.subHeader}>Jastip keliling Indonesia, ongkos aman!</Text>
 
       <View style={styles.formGroup}>
         <Input
-          label="Negara Tujuan"
-          placeholder="Contoh: Jepang, Singapore"
-          value={country}
-          onChangeText={setCountry}
-          leftIcon={{ type: 'font-awesome', name: 'plane', size: 18 }}
+          label="Provinsi Tujuan"
+          placeholder="Contoh: Jawa Timur, Bali"
+          value={province}
+          onChangeText={setProvince}
+          leftIcon={{ type: 'font-awesome', name: 'map' }}
         />
         
         <Input
-          label="Kota (Opsional)"
-          placeholder="Contoh: Tokyo, Osaka"
+          label="Kota / Kabupaten"
+          placeholder="Contoh: Surabaya, Denpasar"
           value={city}
           onChangeText={setCity}
-          leftIcon={{ type: 'font-awesome', name: 'map-marker', size: 18 }}
+          leftIcon={{ type: 'font-awesome', name: 'map-marker' }}
         />
 
-        {/* 4. AREA DATE PICKER YANG BARU */}
-        <View style={{ paddingHorizontal: 10, marginBottom: 20 }}>
-            <Text style={{ fontSize: 16, color: '#86939e', fontWeight: 'bold', marginBottom: 5 }}>
-                Tanggal Berangkat
-            </Text>
+        {/* PILIH KENDARAAN */}
+        <Text style={styles.label}>Naik apa kesana?</Text>
+        <View style={styles.vehicleContainer}>
+            {VEHICLES.map((v) => (
+                <TouchableOpacity 
+                    key={v.id} 
+                    style={[styles.vehicleBox, vehicle === v.id && styles.vehicleSelected]}
+                    onPress={() => setVehicle(v.id)}
+                >
+                    <Icon 
+                        name={v.icon} 
+                        type="font-awesome" 
+                        size={24} 
+                        color={vehicle === v.id ? 'white' : '#555'} 
+                    />
+                    <Text style={{ fontSize: 10, marginTop: 4, color: vehicle === v.id ? 'white' : '#555' }}>
+                        {v.name}
+                    </Text>
+                </TouchableOpacity>
+            ))}
+        </View>
+
+        {/* INPUT TANGGAL */}
+        <View style={{ paddingHorizontal: 10, marginBottom: 20, marginTop: 10 }}>
+            <Text style={styles.label}>Tanggal Berangkat</Text>
             <TouchableOpacity onPress={() => setShowPicker(true)}>
                 <View style={styles.dateInputFake}>
                     <Text style={{ color: dateSelected ? 'black' : '#ccc', fontSize: 16 }}>
                         {dateSelected ? formatDateDisplay(date) : "Pilih Tanggal..."}
                     </Text>
+                    <Icon name="calendar" type="font-awesome" color="#2089dc" />
                 </View>
             </TouchableOpacity>
         </View>
 
-        {/* Komponen Picker (Hanya muncul jika showPicker = true) */}
         {showPicker && (
-            <DateTimePicker
-                testID="dateTimePicker"
-                value={date}
-                mode="date"
-                display="default"
-                onChange={onChangeDate}
-                minimumDate={new Date()} // Gak bisa pilih tanggal masa lalu
-            />
+            <DateTimePicker value={date} mode="date" display="default" onChange={onChangeDate} minimumDate={new Date()} />
         )}
 
         <Input
-          label="Keterangan / Titipan yang diterima"
-          placeholder="Open jastip Uniqlo, Snack, Kosmetik..."
+          label="Keterangan"
+          placeholder="Open jastip oleh-oleh khas..."
           value={desc}
           onChangeText={setDesc}
           multiline
           numberOfLines={3}
-          leftIcon={{ type: 'font-awesome', name: 'comment', size: 18 }}
+          leftIcon={{ type: 'font-awesome', name: 'comment' }}
         />
 
         <Button
-          title={loading ? "Sedang Posting..." : "Posting Jastip ✈️"}
+          title={loading ? "Sedang Posting..." : "Posting Rute 🇮🇩"}
           onPress={handlePostTrip}
           disabled={loading}
           containerStyle={{ marginTop: 20 }}
@@ -174,14 +179,22 @@ export default function CreateTrip({ session }: { session: Session }) {
 const styles = StyleSheet.create({
   container: { padding: 20, backgroundColor: 'white' },
   header: { textAlign: 'center', marginBottom: 5 },
-  subHeader: { textAlign: 'center', color: 'gray', marginBottom: 30 },
+  subHeader: { textAlign: 'center', color: 'gray', marginBottom: 20 },
   formGroup: { marginBottom: 50 },
-  // Styling tambahan agar mirip Input biasa
+  label: { fontSize: 16, color: '#86939e', fontWeight: 'bold', marginLeft: 10, marginBottom: 10 },
   dateInputFake: {
-      borderBottomWidth: 1,
-      borderColor: '#86939e',
-      paddingVertical: 10,
-      paddingHorizontal: 5,
-      marginBottom: 5
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      borderBottomWidth: 1, borderColor: '#86939e',
+      paddingVertical: 10, paddingHorizontal: 5, marginBottom: 5
+  },
+  vehicleContainer: {
+      flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', marginBottom: 15
+  },
+  vehicleBox: {
+      width: '30%', backgroundColor: '#f0f0f0', padding: 10, borderRadius: 8,
+      alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: '#ddd'
+  },
+  vehicleSelected: {
+      backgroundColor: '#2089dc', borderColor: '#2089dc'
   }
 });
