@@ -1,24 +1,61 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import { Session } from '@supabase/supabase-js';
+import { Slot, useRouter, useSegments } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import { supabase } from '../lib/supabase';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const [session, setSession] = useState<Session | null>(null);
+  const [initialized, setInitialized] = useState(false);
+  const router = useRouter();
+  const segments = useSegments();
 
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
+  useEffect(() => {
+    // Pantau status login
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        setInitialized(true);
+      }
+    );
+
+    // Cek awal
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setInitialized(true);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!initialized) return;
+
+    // Cek apakah user sedang berada di halaman Login?
+    // segments[0] bisa jadi undefined kalau di root, atau 'login'
+    const inAuthGroup = segments[0] === 'login';
+
+    if (session && inAuthGroup) {
+      // KASUS 1: Sudah Login, tapi coba buka halaman Login -> Lempar ke Tabs
+      router.replace('/(tabs)');
+    } else if (!session && !inAuthGroup) {
+      // KASUS 2: Belum Login, tapi coba buka halaman dalam -> Tendang ke Login
+      router.replace('/login');
+    }
+    
+    // KASUS 3 (PENTING):
+    // Kalau session ada, dan user sedang di '/trip/123' (bukan inAuthGroup),
+    // KODE INI AKAN DIAM SAJA (Membiarkan user masuk).
+    
+  }, [session, initialized, segments]);
+
+  if (!initialized) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#2089dc" />
+      </View>
+    );
+  }
+
+  return <Slot />;
 }
